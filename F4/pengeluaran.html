@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Akuntansi 49 - Laporan Pengeluaran Harian</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+        
+        .bg-primary { background-color: #0f1724; }
+        .bg-secondary { background-color: #1a2332; }
+        .text-accent { color: #00b894; }
+        .bg-accent { background-color: #00b894; }
+        .text-warning { color: #f39c12; }
+        .bg-warning { background-color: #f39c12; }
+        .border-accent { border-color: #00b894; }
+        
+        .card {
+            background: #1a2332;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #00b894, #00a085);
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 12px rgba(0, 184, 148, 0.3);
+        }
+        
+        .transaction-item {
+            transition: all 0.2s ease;
+        }
+        
+        .transaction-item:hover {
+            background-color: #242d3d;
+        }
+        
+        .modal {
+            backdrop-filter: blur(10px);
+        }
+        
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #00b894;
+            box-shadow: 0 0 0 3px rgba(0, 184, 148, 0.1);
+        }
+        
+        .category-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+        }
+        
+        @media (max-width: 768px) {
+            .desktop-only { display: none; }
+        }
+        
+        @media (min-width: 769px) {
+            .mobile-only { display: none; }
+        }
+    </style>
+</head>
+<body class="bg-primary text-white min-h-screen">
+    <!-- Header -->
+    <header class="bg-secondary shadow-lg">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center space-x-3">
+                    <div class="w-10 h-10 bg-accent rounded-lg flex items-center justify-center">
+                        <span class="text-white font-bold text-lg">49</span>
+                    </div>
+                    <h1 class="text-xl md:text-2xl font-bold">Akuntansi 49</h1>
+                </div>
+                
+                <!-- Export Buttons -->
+                <div class="flex space-x-2">
+                    <button onclick="exportToExcel()" class="bg-warning hover:bg-yellow-600 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors">
+                        📊 Excel
+                    </button>
+                    <button onclick="exportToCSV()" class="bg-gray-600 hover:bg-gray-700 text-white px-3 py-2 rounded-lg text-sm font-medium transition-colors">
+                        📄 CSV
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container mx-auto px-4 py-6 max-w-6xl">
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="card p-4">
+                <h3 class="text-sm text-gray-400 mb-1">Saldo Hari Ini</h3>
+                <p class="text-2xl font-bold text-accent" id="todayBalance">Rp 0</p>
+            </div>
+            <div class="card p-4">
+                <h3 class="text-sm text-gray-400 mb-1">Total Pengeluaran</h3>
+                <p class="text-2xl font-bold text-red-400" id="todayExpense">Rp 0</p>
+            </div>
+            <div class="card p-4 flex items-center justify-between">
+                <div>
+                    <h3 class="text-sm text-gray-400 mb-1">Transaksi Hari Ini</h3>
+                    <p class="text-2xl font-bold" id="todayCount">0</p>
+                </div>
+                <button onclick="openModal()" class="btn-primary w-12 h-12 rounded-full text-white text-2xl font-bold">
+                    +
+                </button>
+            </div>
+        </div>
+
+        <!-- Quick Add Button (Mobile) -->
+        <div class="mobile-only mb-4">
+            <button onclick="openModal()" class="btn-primary w-full py-3 rounded-lg text-white font-semibold text-lg">
+                + Tambah Transaksi Baru
+            </button>
+        </div>
+
+        <!-- Transactions List -->
+        <div class="card p-4">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">Riwayat Transaksi</h2>
+                <div class="flex space-x-2">
+                    <select id="filterCategory" onchange="filterTransactions()" class="bg-secondary border border-gray-600 rounded-lg px-3 py-2 text-sm">
+                        <option value="">Semua Kategori</option>
+                        <option value="Makanan">Makanan</option>
+                        <option value="Transport">Transport</option>
+                        <option value="Belanja">Belanja</option>
+                        <option value="Tagihan">Tagihan</option>
+                        <option value="Lainnya">Lainnya</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div id="transactionsList" class="space-y-2">
+                <!-- Transactions will be populated here -->
+            </div>
+            
+            <div id="emptyState" class="text-center py-8 text-gray-400">
+                <div class="text-4xl mb-2">📝</div>
+                <p>Belum ada transaksi hari ini</p>
+                <p class="text-sm">Klik tombol + untuk menambah transaksi pertama</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal -->
+    <div id="transactionModal" class="fixed inset-0 bg-black bg-opacity-50 modal hidden flex items-center justify-center z-50 p-4">
+        <div class="bg-secondary rounded-lg p-6 w-full max-w-md">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-semibold" id="modalTitle">Tambah Transaksi</h3>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-white text-2xl">&times;</button>
+            </div>
+            
+            <form id="transactionForm" onsubmit="saveTransaction(event)">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Tanggal</label>
+                        <input type="date" id="transactionDate" class="w-full bg-primary border border-gray-600 rounded-lg px-3 py-2" required>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Kategori</label>
+                        <select id="transactionCategory" class="w-full bg-primary border border-gray-600 rounded-lg px-3 py-2" required>
+                            <option value="">Pilih Kategori</option>
+                            <option value="Makanan">🍽️ Makanan</option>
+                            <option value="Transport">🚗 Transport</option>
+                            <option value="Belanja">🛒 Belanja</option>
+                            <option value="Tagihan">💳 Tagihan</option>
+                            <option value="Lainnya">📦 Lainnya</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Deskripsi</label>
+                        <input type="text" id="transactionDescription" placeholder="Contoh: Makan siang di kantin" class="w-full bg-primary border border-gray-600 rounded-lg px-3 py-2" required>
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Nominal (Rp)</label>
+                        <input type="number" id="transactionAmount" placeholder="0" class="w-full bg-primary border border-gray-600 rounded-lg px-3 py-2" required min="1">
+                    </div>
+                </div>
+                
+                <div class="flex space-x-3 mt-6">
+                    <button type="button" onclick="closeModal()" class="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-2 rounded-lg font-medium transition-colors">
+                        Batal
+                    </button>
+                    <button type="submit" class="flex-1 btn-primary text-white py-2 rounded-lg font-medium">
+                        Simpan
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let transactions = JSON.parse(localStorage.getItem('transactions')) || [];
+        let editingId = null;
+
+        const categoryIcons = {
+            'Makanan': '🍽️',
+            'Transport': '🚗',
+            'Belanja': '🛒',
+            'Tagihan': '💳',
+            'Lainnya': '📦'
+        };
+
+        const categoryColors = {
+            'Makanan': '#e74c3c',
+            'Transport': '#3498db',
+            'Belanja': '#9b59b6',
+            'Tagihan': '#f39c12',
+            'Lainnya': '#95a5a6'
+        };
+
+        function formatCurrency(amount) {
+            return new Intl.NumberFormat('id-ID', {
+                style: 'currency',
+                currency: 'IDR',
+                minimumFractionDigits: 0
+            }).format(amount);
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('id-ID', {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric'
+            });
+        }
+
+        function getTodayString() {
+            return new Date().toISOString().split('T')[0];
+        }
+
+        function updateSummary() {
+            const today = getTodayString();
+            const todayTransactions = transactions.filter(t => t.date === today);
+            
+            const todayExpense = todayTransactions.reduce((sum, t) => sum + t.amount, 0);
+            const todayCount = todayTransactions.length;
+            
+            document.getElementById('todayBalance').textContent = formatCurrency(-todayExpense);
+            document.getElementById('todayExpense').textContent = formatCurrency(todayExpense);
+            document.getElementById('todayCount').textContent = todayCount;
+        }
+
+        function renderTransactions(transactionsToRender = transactions) {
+            const container = document.getElementById('transactionsList');
+            const emptyState = document.getElementById('emptyState');
+            
+            if (transactionsToRender.length === 0) {
+                container.innerHTML = '';
+                emptyState.style.display = 'block';
+                return;
+            }
+            
+            emptyState.style.display = 'none';
+            
+            // Sort by date (newest first)
+            const sortedTransactions = [...transactionsToRender].sort((a, b) => new Date(b.date) - new Date(a.date));
+            
+            container.innerHTML = sortedTransactions.map(transaction => `
+                <div class="transaction-item bg-primary rounded-lg p-4 flex items-center justify-between">
+                    <div class="flex items-center space-x-3">
+                        <div class="category-icon" style="background-color: ${categoryColors[transaction.category]}20; color: ${categoryColors[transaction.category]}">
+                            ${categoryIcons[transaction.category]}
+                        </div>
+                        <div>
+                            <h4 class="font-medium">${transaction.description}</h4>
+                            <p class="text-sm text-gray-400">${formatDate(transaction.date)} • ${transaction.category}</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-3">
+                        <span class="font-semibold text-red-400">${formatCurrency(transaction.amount)}</span>
+                        <div class="flex space-x-1">
+                            <button onclick="editTransaction('${transaction.id}')" class="text-blue-400 hover:text-blue-300 p-1">
+                                ✏️
+                            </button>
+                            <button onclick="deleteTransaction('${transaction.id}')" class="text-red-400 hover:text-red-300 p-1">
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function openModal() {
+            document.getElementById('transactionModal').classList.remove('hidden');
+            document.getElementById('transactionDate').value = getTodayString();
+            document.getElementById('modalTitle').textContent = editingId ? 'Edit Transaksi' : 'Tambah Transaksi';
+        }
+
+        function closeModal() {
+            document.getElementById('transactionModal').classList.add('hidden');
+            document.getElementById('transactionForm').reset();
+            editingId = null;
+        }
+
+        function saveTransaction(event) {
+            event.preventDefault();
+            
+            const formData = {
+                id: editingId || Date.now().toString(),
+                date: document.getElementById('transactionDate').value,
+                category: document.getElementById('transactionCategory').value,
+                description: document.getElementById('transactionDescription').value,
+                amount: parseInt(document.getElementById('transactionAmount').value)
+            };
+
+            if (editingId) {
+                const index = transactions.findIndex(t => t.id === editingId);
+                transactions[index] = formData;
+            } else {
+                transactions.push(formData);
+            }
+
+            localStorage.setItem('transactions', JSON.stringify(transactions));
+            updateSummary();
+            renderTransactions();
+            closeModal();
+        }
+
+        function editTransaction(id) {
+            const transaction = transactions.find(t => t.id === id);
+            if (transaction) {
+                editingId = id;
+                document.getElementById('transactionDate').value = transaction.date;
+                document.getElementById('transactionCategory').value = transaction.category;
+                document.getElementById('transactionDescription').value = transaction.description;
+                document.getElementById('transactionAmount').value = transaction.amount;
+                openModal();
+            }
+        }
+
+        function deleteTransaction(id) {
+            if (confirm('Yakin ingin menghapus transaksi ini?')) {
+                transactions = transactions.filter(t => t.id !== id);
+                localStorage.setItem('transactions', JSON.stringify(transactions));
+                updateSummary();
+                renderTransactions();
+            }
+        }
+
+        function filterTransactions() {
+            const category = document.getElementById('filterCategory').value;
+            const filtered = category ? transactions.filter(t => t.category === category) : transactions;
+            renderTransactions(filtered);
+        }
+
+        function exportToExcel() {
+            if (transactions.length === 0) {
+                alert('Tidak ada data untuk diekspor');
+                return;
+            }
+
+            const exportData = transactions.map(t => ({
+                'Tanggal': formatDate(t.date),
+                'Kategori': t.category,
+                'Deskripsi': t.description,
+                'Nominal': t.amount
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Laporan Pengeluaran');
+            
+            const fileName = `Akuntansi49_${new Date().toISOString().split('T')[0]}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+        }
+
+        function exportToCSV() {
+            if (transactions.length === 0) {
+                alert('Tidak ada data untuk diekspor');
+                return;
+            }
+
+            const headers = ['Tanggal', 'Kategori', 'Deskripsi', 'Nominal'];
+            const csvContent = [
+                headers.join(','),
+                ...transactions.map(t => [
+                    formatDate(t.date),
+                    t.category,
+                    `"${t.description}"`,
+                    t.amount
+                ].join(','))
+            ].join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', `Akuntansi49_${new Date().toISOString().split('T')[0]}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Initialize app
+        document.addEventListener('DOMContentLoaded', function() {
+            updateSummary();
+            renderTransactions();
+        });
+
+        // Close modal when clicking outside
+        document.getElementById('transactionModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+    </script>
+<script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'9793aa3bf120959b',t:'MTc1Njg4NTkxOC4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>
